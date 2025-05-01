@@ -11,8 +11,10 @@ from model import Recommender
 import random
 if __name__ == '__main__':
 	logger.saveDefault = True
-	config = tf.ConfigProto()
+	config = tf.ConfigProto(allow_soft_placement=True)
 	config.gpu_options.allow_growth = True
+	physical_devices = tf.config.experimental.list_physical_devices('GPU')
+	tf.config.experimental.set_visible_devices(physical_devices[1:], 'GPU')
 
 	log('Start')
 	handler = DataHandler()

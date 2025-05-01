@@ -1,0 +1,15 @@
+Test Total: HR@10 = 0.3874, NDCG@10 = 0.2363  
+epochNdcg1:0.0,epochHit1:0.0,epochNdcg5:0.20487067909027978,epochHit5:0.2899
+epochNdcg15:0.0,epochHit15:0.0,epochNdcg20:0.26055791599391515,epochHit20:0.4833
+Test Popular Users: HR@10 = 0.4490, NDCG@10 = 0.2807  
+epochNdcg1:0.0,epochHit1:0.0,epochNdcg5:0.246932561624725,epochHit5:0.344
+epochNdcg15:0.0,epochHit15:0.0,epochNdcg20:0.31010724199942347,epochHit20:0.564
+Test Unpopular Users: HR@10 = 0.3806, NDCG@10 = 0.2314  
+epochNdcg1:0.0,epochHit1:0.0,epochNdcg5:0.20019713658645252,epochHit5:0.2838888888888889
+epochNdcg15:0.0,epochHit15:0.0,epochNdcg20:0.25505243532663635,epochHit20:0.47433333333333333
+Test Popular Items: HR@10 = 0.3895, NDCG@10 = 0.2370  
+epochNdcg1:0.0,epochHit1:0.0,epochNdcg5:0.20524447176742766,epochHit5:0.290950744558992
+epochNdcg15:0.0,epochHit15:0.0,epochNdcg20:0.2614333324040618,epochHit20:0.48599396022076435
+Test Unpopular Items: HR@10 = 0.3866, NDCG@10 = 0.2354  
+epochNdcg1:0.0,epochHit1:0.0,epochNdcg5:0.20396530404792587,epochHit5:0.2890115403913698
+epochNdcg15:0.0,epochHit15:0.0,epochNdcg20:0.25960282323341627,epochHit20:0.48218765679879577

@@ -71,7 +71,7 @@ def transToLsts(mat, mask=False, norm=False):
 class DataHandler:
 	def __init__(self):
 		if args.data == 'yelp':
-			predir = './Datasets/Yelp/'
+			predir = './Datasets/yelp/'
 		elif args.data == 'gowalla':
 			predir = './Datasets/gowalla/'
 		elif args.data == 'amazon':

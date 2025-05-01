@@ -52,6 +52,7 @@ class Recommender:
 		maxndcg=0.0
 		maxres=dict()
 		maxepoch=0
+		max_pu = max_uu = max_pi = max_ui = 0.0
 		for ep in range(stloc, args.epoch):
 			test = (ep % args.tstEpoch == 0)
 			reses = self.trainEpoch()
@@ -59,15 +60,48 @@ class Recommender:
 			if test:
 				reses = self.testEpoch()
 				log(self.makePrint('Test', ep, reses, test))
+
+				pu_res = self.testEpoch(popularity_users=True)
+				log(self.makePrint('Test Popular Users', ep, pu_res, test))
+
+				uu_res = self.testEpoch(popularity_users=False)
+				log(self.makePrint('Test Unpopular Users', ep, uu_res, test))
+
+				pi_res = self.testEpoch(popularity_items=True)
+				log(self.makePrint('Test Popular Items', ep, pi_res, test))
+
+				ui_res = self.testEpoch(popularity_items=False)
+				log(self.makePrint('Test Unpopular Items', ep, ui_res, test))
+
 			if ep % args.tstEpoch == 0 and reses['NDCG']>maxndcg:
 				self.saveHistory()
 				maxndcg=reses['NDCG']
 				maxres=reses
 				maxepoch=ep
+				max_pu = pu_res
+				max_uu = uu_res
+				max_pi = pi_res
+				max_ui = ui_res
 			print()
 		reses = self.testEpoch()
 		log(self.makePrint('Test', args.epoch, reses, True))
 		log(self.makePrint('max', maxepoch, maxres, True))
+
+		popularity_reses = self.testEpoch(popularity_users=True)
+		log(self.makePrint('Test Popular Users', ep, popularity_reses, test))
+		log(self.makePrint('Max Popular Users', maxepoch, max_pu, test))
+
+		popularity_reses = self.testEpoch(popularity_users=False)
+		log(self.makePrint('Test Unpopular Users', ep, popularity_reses, test))
+		log(self.makePrint('Max Unpopular Users', maxepoch, max_uu, test))
+
+		popularity_reses = self.testEpoch(popularity_items=True)
+		log(self.makePrint('Test Popular Items', ep, popularity_reses, test))
+		log(self.makePrint('Max Popular Items', maxepoch, max_pi, test))
+
+		popularity_reses = self.testEpoch(popularity_items=False)
+		log(self.makePrint('Test Unpopular Items', ep, popularity_reses, test))
+		log(self.makePrint('Max Unpopular Items', maxepoch, max_ui, test))
 		# self.saveHistory()
 	# def LightGcn(self, adj, )
 	def makeTimeEmbed(self):
@@ -426,24 +460,97 @@ class Recommender:
 				sequence[i]=np.zeros(args.pos_length,dtype=int)
 				mask[i]=np.zeros(args.pos_length)
 		return uLocs, iLocs, temTst, tstLocs, sequence, mask, uLocs_seq, val_list
+	
+	def filter_by_popularity(self, popular_percentage):
+		from collections import Counter
+		item_interactions = Counter()
+		user_interactions = Counter()
+		for user_id, item_list in enumerate(self.handler.sequence):
+			if user_id not in self.handler.tstUsrs:
+				continue
+			item_interactions.update(item_list)
+			user_interactions[user_id] += len(item_list)
+		items_cutoff = int(len(item_interactions) * popular_percentage)
+		users_cutoff = int(len(user_interactions) * popular_percentage)
+		sorted_items = sorted(item_interactions.items(), key=lambda x: x[1], reverse=True)
+		sorted_users = sorted(user_interactions.items(), key=lambda x: x[1], reverse=True)
+		popular_items = sorted([item for item, _ in sorted_items[:items_cutoff]])
+		unpopular_items = sorted([item for item, _ in sorted_items[items_cutoff:]])
+		popular_users = sorted([user for user, _ in sorted_users[:users_cutoff]])
+		unpopular_users = sorted([user for user, _ in sorted_users[users_cutoff:]])
+		# Convert to numpy arrays
+		popular_items = np.array(popular_items, dtype=np.int32)
+		unpopular_items = np.array(unpopular_items, dtype=np.int32)
+		popular_users = np.array(popular_users, dtype=np.int32)
+		unpopular_users = np.array(unpopular_users, dtype=np.int32)
+		return popular_items, unpopular_items, popular_users, unpopular_users
 
-	def testEpoch(self):
+	def testEpoch(self, popularity_users=None, popularity_items=None):
+		def generate_rating_matrix_test(user_seq, num_users, num_items, items_to_keep=None):
+			from scipy.sparse import csr_matrix
+			# three lists are used to construct sparse matrix
+			row = []
+			col = []
+			data = []
+			included_users = set()
+			for user_id, item_list in enumerate(user_seq):
+				for item in item_list:
+					if items_to_keep is not None and item not in items_to_keep:
+						continue
+					row.append(user_id)
+					included_users.add(user_id)
+					col.append(item)
+					data.append(1)
+			row = np.array(row)
+			col = np.array(col)
+			data = np.array(data)
+			rating_matrix = csr_matrix((data, (row, col)), shape=(num_users, num_items))
+			return rating_matrix, included_users
+
+		if popularity_items != None or popularity_users != None:
+			pi, ui, pu, uu = self.filter_by_popularity(0.1)
+		
+		ids = self.handler.tstUsrs
+		if popularity_users == True:
+			ids = pu
+		elif popularity_users == False:
+			ids = uu
+
+		trnMat = self.handler.trnMat
+		if popularity_items == True:
+			trnMat, included_users = generate_rating_matrix_test(self.handler.sequence, args.user, args.item, items_to_keep=pi)
+			induced_ids = []
+			for user_id in ids:
+				if user_id not in included_users:
+					continue
+				induced_ids.append(user_id)
+			ids = np.array(induced_ids, dtype=np.int32)
+		elif popularity_items == False:
+			trnMat, included_users = generate_rating_matrix_test(self.handler.sequence, args.user, args.item, items_to_keep=ui)
+			induced_ids = []
+			for user_id in ids:
+				if user_id not in included_users:
+					continue
+				induced_ids.append(user_id)
+			ids = np.array(induced_ids, dtype=np.int32)
+
 		epochHit, epochNdcg = [0] * 2
 		epochHit5, epochNdcg5 = [0] * 2
 		epochHit20, epochNdcg20 = [0] * 2
 		epochHit1, epochNdcg1 = [0] * 2
 		epochHit15, epochNdcg15 = [0] * 2
-		ids = self.handler.tstUsrs
+		# ids = self.handler.tstUsrs
 		num = len(ids)
 		tstBat = args.batch
 		steps = int(np.ceil(num / tstBat))
 		# np.random.seed(100)
+		steps_taken = 0
 		for i in range(steps):
 			st = i * tstBat
 			ed = min((i+1) * tstBat, num)
 			batIds = ids[st: ed]
 			feed_dict = {}
-			uLocs, iLocs, temTst, tstLocs, sequence, mask, uLocs_seq, val_list = self.sampleTestBatch(batIds, self.handler.trnMat)
+			uLocs, iLocs, temTst, tstLocs, sequence, mask, uLocs_seq, val_list = self.sampleTestBatch(batIds, trnMat)
 			suLocs, siLocs, _ = self.sampleSslBatch(batIds, self.handler.subMat, False)
 			feed_dict[self.uids] = uLocs
 			feed_dict[self.iids] = iLocs
@@ -474,7 +581,9 @@ class Recommender:
 			epochHit1 += hit1
 			epochNdcg1 += ndcg1
 			log('Steps %d/%d: hit10 = %d, ndcg10 = %d' % (i, steps, hit, ndcg), save=False, oneline=True)
+			steps_taken += 1
 		ret = dict()
+		print("Steps taken:", steps_taken, "num:", num)
 		ret['HR'] = epochHit / num
 		ret['NDCG'] = epochNdcg / num
 		print("epochNdcg1:{},epochHit1:{},epochNdcg5:{},epochHit5:{}".format(epochNdcg1/ num,epochHit1/ num,epochNdcg5/ num,epochHit5/ num))
@@ -499,10 +608,18 @@ class Recommender:
 			if temTst[j] in shoot:
 				hit += 1
 				ndcg += np.reciprocal(np.log2(shoot.index(temTst[j])+2))
+			shoot = list(map(lambda x: x[1], predvals[:1]))
+			if temTst[j] in shoot:
+				hit1 += 1
+				ndcg1 += np.reciprocal(np.log2(shoot.index(temTst[j])+2))
 			shoot = list(map(lambda x: x[1], predvals[:5]))
 			if temTst[j] in shoot:
 				hit5 += 1
 				ndcg5 += np.reciprocal(np.log2(shoot.index(temTst[j])+2))
+			shoot = list(map(lambda x: x[1], predvals[:15]))
+			if temTst[j] in shoot:
+				hit15 += 1
+				ndcg15 += np.reciprocal(np.log2(shoot.index(temTst[j])+2))
 			shoot = list(map(lambda x: x[1], predvals[:20]))	
 			if temTst[j] in shoot:
 				hit20 += 1
